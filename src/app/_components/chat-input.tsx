@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 interface ChatInputProps {
     onSendMessage: (text: string) => void;
     onImageSelect?: (file: File) => void;
-    // Updated: No duration needed here
     onSendAudio?: (audioDataUrl: string, mimeType: string) => void;
     isLoading?: boolean;
 }
@@ -18,7 +17,7 @@ interface ChatInputProps {
 export function ChatInput({
     onSendMessage,
     onImageSelect,
-    onSendAudio, // Updated prop
+    onSendAudio,
     isLoading
 }: ChatInputProps) {
     const [inputValue, setInputValue] = useState("");
@@ -45,35 +44,25 @@ export function ChatInput({
         console.log("Media stream stopped.");
     }, []);
 
-    // Recorder onstop handler - Simplified (No duration calculation)
+    // Recorder onstop handler
     const handleRecordingStop = useCallback(() => {
-        if (audioChunksRef.current.length === 0) {
-            console.log("No audio data recorded.");
-            cleanupStream();
-            return;
-        }
+        if (audioChunksRef.current.length === 0) { cleanupStream(); return; }
         const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        audioChunksRef.current = []; // Clear chunks
-
+        audioChunksRef.current = [];
         console.log(`ChatInput: Recorded Blob MIME type: ${audioBlob.type}, Size: ${audioBlob.size}`);
-
-        // --- Process and Send Data (WITHOUT pre-calculated duration) ---
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
             const base64data = reader.result as string;
             if (base64data && onSendAudio) {
                 console.log(`ChatInput: Sending audio (${mimeType}), size: ${audioBlob.size} bytes`);
-                // --- Call handler WITHOUT duration ---
                 onSendAudio(base64data, mimeType);
             } else { console.error("Failed to convert audio blob."); }
             cleanupStream();
         };
         reader.onerror = (error) => { console.error("FileReader error:", error); cleanupStream(); }
-        // --- End Process and Send ---
-
-    }, [onSendAudio, cleanupStream]); // Dependencies
+    }, [onSendAudio, cleanupStream]);
 
     // Audio Recording Start Logic
     const startRecording = useCallback(async () => {
@@ -89,23 +78,21 @@ export function ChatInput({
             let supportedMimeType = '';
             for (const option of options) { if (MediaRecorder.isTypeSupported(option.mimeType)) { supportedMimeType = option.mimeType; break; } }
             console.log("Using MIME Type:", supportedMimeType || "default");
-
             const recorder = new MediaRecorder(stream, supportedMimeType ? { mimeType: supportedMimeType } : undefined);
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
             recorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
-            recorder.onstop = handleRecordingStop; // Assign memoized stop handler
+            recorder.onstop = handleRecordingStop;
             recorder.onerror = (event) => { console.error("MediaRecorder error:", event); setIsRecording(false); cleanupStream(); };
             recorder.start();
-            setIsRecording(true);
-            console.log("Recording started");
+            setIsRecording(true); console.log("Recording started");
         } catch (err) {
             console.error("Error accessing microphone/starting recording:", err);
             setIsRecording(false); cleanupStream();
             if (err instanceof Error && err.name === 'NotAllowedError') { alert('Microphone permission denied...'); }
             else { alert('Could not start recording...'); }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // No longer need eslint-disable here as dependencies are correct
     }, [isLoading, isRecording, cleanupStream, handleRecordingStop]);
 
     // Audio Recording Stop Logic
